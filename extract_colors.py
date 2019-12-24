@@ -4,7 +4,7 @@ import numpy as np
 from scipy.cluster.vq import kmeans
 
 
-def extract_colors(original_img, K=10, iter=30):
+def extract_colors(original_img, K=10, iter=200):
     # BGR
     img = original_img.copy().astype(np.float32).reshape(-1, 3)
     h, w, c = original_img.shape
