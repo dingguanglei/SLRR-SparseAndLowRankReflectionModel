@@ -4,7 +4,7 @@ import numpy as np
 from scipy.cluster.vq import kmeans
 
 
-def extract_colors(original_img, K=10):
+def extract_colors(original_img, K=10, iter=30):
     # BGR
     img = original_img.copy().astype(np.float32).reshape(-1, 3)
     h, w, c = original_img.shape
@@ -22,13 +22,14 @@ def extract_colors(original_img, K=10):
     img_rtp[:, P] = np.arctan(y / (x + eps))
     # cluster on T, P
     # K = 10
-    cluster_tp, dist = kmeans(img_rtp[:, (T, P)], K, iter=30, thresh=1e-05, check_finite=True)
+    cluster_tp, dist = kmeans(img_rtp[:, (T, P)], K, iter=iter, thresh=1e-05, check_finite=True)
     # get R of cluster_tp
     img_tp = img_rtp[:, (T, P)][:, np.newaxis, :]  # N, 1, 2
     img_r = img_rtp[:, R]  # N,
     # print(x, img_rtp)
     distance = np.linalg.norm(cluster_tp - img_tp, axis=2)  # , N,K
     min_index = np.argmin(distance, axis=1).astype(np.uint32)  # ,N
+    K = min(K, cluster_tp.shape[0])
     cluster_r = np.ones((K)).astype(np.float32)
     for i in range(K):
         cluster_r[i] = (img_r[min_index == i].max() + img_r[min_index == i].min()) * 0.5
@@ -41,7 +42,7 @@ def extract_colors(original_img, K=10):
     colors[:, G] = cluster_rtp[:, R] * np.sin(cluster_rtp[:, T]) * np.sin(cluster_rtp[:, P])
     colors[:, R] = cluster_rtp[:, R] * np.cos(cluster_rtp[:, T])
     colors = np.clip(colors, a_min=0, a_max=1)
-    return colors
+    return colors.transpose([1, 0])
 
 
 if __name__ == '__main__':

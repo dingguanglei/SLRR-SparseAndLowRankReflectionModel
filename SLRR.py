@@ -25,7 +25,7 @@ def dot(*arg):
 
 
 # init
-def SLRR(X, color_dics, Gama=None, iteration=30):
+def SLRR(X, color_dics, Gamma=None, iteration=200):
     """
     X (N, K)
     color_dics (3, K)
@@ -39,9 +39,9 @@ def SLRR(X, color_dics, Gama=None, iteration=30):
     Wd = np.zeros((K, N), dtype=dtype)  # K, N
     J = np.zeros((K, N), dtype=dtype)  # K, N
     H = np.zeros((K, N), dtype=dtype)  # K, N
-    Ms = 0  # 1, N
-    S1 = 0
-    S2 = 0
+    Ms = np.zeros((K, N))  # 1, N
+    S1 = np.zeros((K, N))
+    S2 = np.zeros((1, N))
     Y1 = np.zeros((3, N), dtype=dtype)
     Y2 = np.zeros((K, N), dtype=dtype)
     Y3 = np.zeros((K, N), dtype=dtype)
@@ -51,14 +51,14 @@ def SLRR(X, color_dics, Gama=None, iteration=30):
     mu_max = 1e10
     rho = 1.1  # p
     eps = 1e-6
+    lamda = 0.1 / np.sqrt(N)
+    tau = 1 / np.sqrt(N)
 
     Phi_d = color_dics  # 3, K
     is_converged = False
-
-    lamda = 0.1 / np.sqrt(N)
-    tau = 1 / np.sqrt(N)
-    if Gama is None:
-        Gama = np.ones((3, 1), dtype=dtype) * 1 / 3
+    if Gamma is None:
+        Gamma = np.ones((3, 1), dtype=dtype) * 1 / 3
+        Gamma = Gamma/norm(Gamma)
     # Converge Loop
     i = 0
     while not is_converged and i < iteration:
@@ -66,25 +66,25 @@ def SLRR(X, color_dics, Gama=None, iteration=30):
         # Update J
         J = update_J(N, Wd, Y2, eps, mu)
         # Update Ms
-        Ms = update_Ms(Gama, Ms, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu)
+        Ms = update_Ms(Gamma, Ms, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu)
         # Update H
         H = Update_H(Wd, Y3, mu, tau)
         # Update Wd
-        Wd = Update_Wd(Gama, H, J, K, Ms, Phi_d, S1, X, Y1, Y2, Y3, Y4, mu)
+        Wd = Update_Wd(Gamma, H, J, K, Ms, Phi_d, S1, X, Y1, Y2, Y3, Y4, mu)
         # Update S1(K, N)S2(1, N)  Wd(K, N)  Y4(K, N)  Ms(1, N) Y5(1, N)
         S1 = max_0(Wd + Y4 / mu)
         S2 = max_0(Ms + Y5 / mu)
         # Update Ei, Yi
-        E1 = X - dot(Phi_d, Wd) - dot(Gama, Ms)  # E1(3, N)
+        E1 = X - dot(Phi_d, Wd) - dot(Gamma, Ms)  # E1(3, N)
         E2 = J - Wd  # E2(K, N)
         E3 = H - Wd  # E3(K, N)
         E4 = Wd - S1  # E4(K, N)
         E5 = Ms - S2  # E5(1, N)
         E = [E1, E2, E3, E4, E5]
-        #print(E1.max(), E2.max(), E3.max(), E4.max(), E5.max())
+        # print(E1.max(), E2.max(), E3.max(), E4.max(), E5.max())
         for Yi, Ei in zip([Y1, Y2, Y3, Y4, Y5], E):
             Yi += Ei * mu
-        #print(Y1.max(), Y2.max(), Y3.max(), Y4.max(), Y5.max())
+        # print(Y1.max(), Y2.max(), Y3.max(), Y4.max(), Y5.max())
         # Update mu
         mu = min(mu_max, rho * mu)
         # is converged?
@@ -97,9 +97,10 @@ def SLRR(X, color_dics, Gama=None, iteration=30):
 
 def Update_Wd(Gama, H, J, K, Ms, Phi_d, S1, X, Y1, Y2, Y3, Y4, mu):
     # Wd(K, N) Phi_d(3, K) Gama(3, 1) Ms(1, N) ,J(K,N) H(K,N) S1(K,N) Y1(3 ,N) Y2(K, N) Y3(K, N) Y4(K,N)
-    W1 = inv(dot(Phi_d.T, Phi_d) + 3 * np.identity(K))  # W1 (3,3)
+    W1 = dot(Phi_d.T, Phi_d) + 3 * np.identity(K)  # W1 (3,3)
     W2 = dot(Phi_d.T, X) - dot(Phi_d.T, Gama, Ms) + J + H + S1 + (dot(Phi_d.T, Y1) + Y2 + Y3 - Y4) / mu  # (K, N)
-    Wd = dot(W1, W2)
+    Wd = dot(inv(W1), W2)
+    Wd = np.clip(Wd, a_min=0, a_max=3)
     return Wd
 
 
