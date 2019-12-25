@@ -26,21 +26,21 @@ from extract_colors import extract_colors
 #                          [1.22655220e-01, 1.00000000e+00, 8.26458991e-01]])
 # color_dics = np.clip((color_dics * 255), a_min=0, a_max=255).astype(np.uint8)
 K = 20
-iteration = 200
+iteration = 300
 img_path = "test_imgs/green.png"
-
+shape = 128
 img = cv2.imread(img_path)
-img = cv2.resize(img, (64, 64)) / 255.0
+img = cv2.resize(img, (shape, shape)) / 255.0
 color_dics = extract_colors(img, K)# K, N
 X = img.reshape((-1, 3)).transpose((1, 0))
 
 print(X.shape, color_dics.shape)
 
 Phi_d, Wd, Ms = SLRR(X, color_dics,iteration=iteration)
-Hlt_mask = Ms.reshape((64, 64, 1))
+Hlt_mask = Ms.reshape((shape, shape, 1))
 Hlt_mask = np.clip((Hlt_mask * 255), a_min=0, a_max=255).astype(np.uint8)
 cv2.imwrite("Hlt.png", Hlt_mask)
 
-diffuse = (np.dot(Phi_d, Wd)).transpose((1, 0)).reshape((64, 64, 3))
+diffuse = (np.dot(Phi_d, Wd)).transpose((1, 0)).reshape((shape, shape, 3))
 diffuse = np.clip((diffuse * 255), a_min=0, a_max=255).astype(np.uint8)
 cv2.imwrite("diffuse.png", diffuse)

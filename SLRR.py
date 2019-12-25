@@ -1,5 +1,7 @@
+# code=utf-8
 import numpy as np
-
+from tqdm import tqdm
+#import matplotlib.pyplot as plt
 norm = np.linalg.norm
 svd = np.linalg.svd
 inv = np.linalg.inv
@@ -58,11 +60,14 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
     is_converged = False
     if Gamma is None:
         Gamma = np.ones((3, 1), dtype=dtype) * 1 / 3
-        Gamma = Gamma/norm(Gamma)
+        Gamma = Gamma / norm(Gamma)
     # Converge Loop
     i = 0
+    pbar = tqdm(total = iteration)
+    max_Es = []
     while not is_converged and i < iteration:
         i += 1
+        pbar.update(1)
         # Update J
         J = update_J(N, Wd, Y2, eps, mu)
         # Update Ms
@@ -90,8 +95,10 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
         # is converged?
         X_norm = norm(X)
         max_E = max([norm(E[i]) / X_norm for i in range(len(E))])
-        print(max_E)
+        max_Es.append(max_E)
         is_converged = max_E < eps
+    print(max_E)
+
     return Phi_d, Wd, Ms
 
 
