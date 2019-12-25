@@ -1,7 +1,8 @@
 # code=utf-8
 import numpy as np
 from tqdm import tqdm
-#import matplotlib.pyplot as plt
+
+# import matplotlib.pyplot as plt
 norm = np.linalg.norm
 svd = np.linalg.svd
 inv = np.linalg.inv
@@ -24,8 +25,6 @@ def dot(*arg):
 
 
 # =======================================
-
-
 # init
 def SLRR(X, color_dics, Gamma=None, iteration=200):
     """
@@ -63,7 +62,7 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
         Gamma = Gamma / norm(Gamma)
     # Converge Loop
     i = 0
-    pbar = tqdm(total = iteration)
+    pbar = tqdm(total=iteration)
     max_Es = []
     while not is_converged and i < iteration:
         i += 1
@@ -71,7 +70,7 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
         # Update J
         J = update_J(N, Wd, Y2, eps, mu)
         # Update Ms
-        Ms = update_Ms(Gamma, Ms, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu)
+        Ms = update_Ms(Gamma, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu)
         # Update H
         H = Update_H(Wd, Y3, mu, tau)
         # Update Wd
@@ -117,7 +116,7 @@ def Update_H(Wd, Y3, mu, tau):
     return H
 
 
-def update_Ms(Gama, Ms, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu):
+def update_Ms(Gama, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu):
     # (1, N)  X(3, N) Phi_d(3, K)  Wd(K, N)  Y1(3, N)  Y5(1, N) Ms(1, N) S2(1, N)
     g = dot(Gama.T, Gama)
     Ms1 = (dot(Gama.T, X - dot(Phi_d, Wd) + Y1 / mu) - Y5 / mu + S2) / g  # Ms(1, N)
