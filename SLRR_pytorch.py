@@ -3,6 +3,7 @@
 import torch
 from tqdm import tqdm
 from functools import partial
+import time
 
 gpu_id = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(gpu_id)
@@ -95,7 +96,7 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
     pbar = tqdm(total=iteration)
     #
     from torch.utils.tensorboard import SummaryWriter
-    writer = SummaryWriter(log_dir="log")
+    writer = SummaryWriter(log_dir="log/%s" % time.asctime(time.localtime(time.time())))
     # max_Es = []
 
     while not is_converged and i < iteration:
