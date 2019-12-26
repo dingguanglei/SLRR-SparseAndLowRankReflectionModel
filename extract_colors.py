@@ -2,11 +2,19 @@
 # Final funciton extract colors
 import numpy as np
 from scipy.cluster.vq import kmeans
-# from kmeans import kmeans_numpy
 
-def extract_colors(original_img, K=10, iter=200):
+def extract_colors(original_img, K=50, iter=200):
+    """extract the color dictionary by using Kmeans
+    Params:
+        original_img: input image(H,W,C)
+        K: size of color dictionary. default:50
+        iter: Kmeans iteration
+    Return:
+        colors: shape(3, K) range(0, 1)
+
+    """
     # BGR
-    img = original_img.copy().astype(np.float32).reshape(-1, 3)  # N, 3
+    img = original_img.copy().astype(np.float64).reshape(-1, 3)  # N, 3
     h, w, c = original_img.shape
     B = R = 0
     G = T = 1
@@ -33,7 +41,7 @@ def extract_colors(original_img, K=10, iter=200):
     min_index = np.argmin(distance, axis=1).astype(np.uint32)  # ,N
     K = min(K, cluster_tp.shape[0])
     print(K)
-    cluster_r = np.ones((K)).astype(np.float32)
+    cluster_r = np.ones((K)).astype(np.float64)
     for i in range(K):
         # cluster_r[i] = (img_r[min_index == i].max() + img_r[min_index == i].min()) * 0.5
         cluster_r[i] = (img_r[min_index == i].min())

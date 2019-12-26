@@ -5,19 +5,20 @@ from tqdm import tqdm
 from functools import partial
 import time
 
+# init global params
 gpu_id = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(gpu_id)
 if device == "cuda": print(torch.cuda.get_device_name(0))
 print("Use %s..." % gpu_id)
-dtype = torch.float32
+dtype = torch.double
 torch.set_default_dtype(dtype)
 
+# init operations
 norm = torch.norm
 inv = torch.inverse
 sqrt = lambda x: x ** 0.5
 sign = torch.sign
 clip = torch.clamp
-
 abs = torch.abs
 
 ones = partial(torch.ones, device=device, dtype=dtype)
@@ -31,6 +32,9 @@ def svd(A):
 
 
 def S_tau(x, tau):
+    """
+    THe function used in Equation(10). S_tau = sgn(x)max(|x| - tau, 0)
+    """
     return sign(x) * clip(abs(x) - tau, min=0)
 
 
@@ -48,19 +52,32 @@ def dot(*arg):
 
 # =======================================
 # init
-def SLRR(X, color_dics, Gamma=None, iteration=200):
-    """
-    X (N, K)
-    color_dics (3, K)
+def SLRR(X, color_dics, Gamma=None, iteration=200, show_converge_in_tensorboard=False):
+    """SLRR model to get Phi_d, Wd, and Ms.
+        X = dot(Phi_d, Wd) + dot(Gamma, Ms)
+    Params:
+        X :shape(N, K)   range(0, 1)
+        color_dics :shape(3, K)
+        Gamma :shape(3, 1)
+    Return:
+        Phi_d :(3, K)
+        Wd: (K, N)
+        Ms: (1, N)
     """
     assert (X <= 1).all() and (color_dics <= 1).all()
+    # convert numpy input to Tensor
+    if Gamma is None:
+        Gamma = ones((3, 1)) * 1 / 3
+    else:
+        Gamma = torch.Tensor(Gamma).to(device)
+    Gamma = Gamma / norm(Gamma)
+    X = torch.Tensor(X).to(device)  # 3, N
+    Phi_d = torch.Tensor(color_dics).to(device)  # 3, K
 
-    X = torch.from_numpy(X).float().to(device)  # 3, N
-    Phi_d = torch.from_numpy(color_dics).float().to(device)  # 3, K
+    N = X.shape[1]  # X(N,3)
+    K = color_dics.shape[1]  # color_dics(3 , K)
 
-    N = X.shape[1]  # N,3
-    K = color_dics.shape[1]  # 3 , K
-
+    # init as Algorithm 1 in Paper
     Wd = zeros((K, N))  # K, N
     J = zeros((K, N))  # K, N
     H = zeros((K, N))  # K, N
@@ -80,30 +97,19 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
     tau = 1 / sqrt(N)
 
     is_converged = False
-    if Gamma is None:
-        Gamma = ones((3, 1)) * 1 / 3
-        # Gamma[0] = 0.3
-        # Gamma[1] = 0.5
-        # Gamma[2] = 0.2
-        Gamma = Gamma / norm(Gamma)
-    # else:
-    #     Gamma = ones((3, 1))
-    #     Gamma[0] = 0.3
-    #     Gamma[1] = 0.5
-    #     Gamma[2] = 0.2
+
     # Converge Loop
     i = 0
     pbar = tqdm(total=iteration)
-    #
-    from torch.utils.tensorboard import SummaryWriter
-    writer = SummaryWriter(log_dir="log/%s" % time.asctime(time.localtime(time.time())))
-    # max_Es = []
+    if show_converge_in_tensorboard:
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter(log_dir="log/%s" % time.asctime(time.localtime(time.time())))
 
     while not is_converged and i < iteration:
         i += 1
         pbar.update(1)
         # Update J
-        J = update_J(N, Wd, Y2, eps, mu)
+        J = update_J(N, Wd, Y2, mu)
         # Update Ms
         Ms = update_Ms(Gamma, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu)
         # Update H
@@ -120,19 +126,19 @@ def SLRR(X, color_dics, Gamma=None, iteration=200):
         E4 = Wd - S1  # E4(K, N)
         E5 = Ms - S2  # E5(1, N)
         E = [E1, E2, E3, E4, E5]
-        # print(E1.max(), E2.max(), E3.max(), E4.max(), E5.max())
         for Yi, Ei in zip([Y1, Y2, Y3, Y4, Y5], E):
             Yi += Ei * mu
-        # print(Y1.max(), Y2.max(), Y3.max(), Y4.max(), Y5.max())
         # Update mu
         mu = min(mu_max, rho * mu)
         # is converged?
         X_norm = norm(X)
         max_E = max([norm(E[i]) / X_norm for i in range(len(E))])
-        writer.add_scalar("max_E", max_E, i)
+        if show_converge_in_tensorboard:
+            writer.add_scalar("max_E", max_E, i)
         is_converged = max_E < eps
-    # print(max_E)
-    writer.close()
+    if show_converge_in_tensorboard:
+        writer.close()
+    # convert to numpy
     Phi_d = Phi_d.cpu().numpy()
     Wd = Wd.cpu().numpy()
     Ms = Ms.cpu().numpy()
@@ -155,22 +161,26 @@ def Update_H(Wd, Y3, mu, tau):
 
 
 def update_Ms(Gama, Phi_d, S2, Wd, X, Y1, Y5, lamda, mu):
-    # (1, N)  X(3, N) Phi_d(3, K)  Wd(K, N)  Y1(3, N)  Y5(1, N) Ms(1, N) S2(1, N)
+    # Ms(1, N)  X(3, N) Phi_d(3, K)  Wd(K, N)  Y1(3, N)  Y5(1, N) Ms(1, N) S2(1, N)
     g = dot(Gama.T, Gama)
     Ms1 = (dot(Gama.T, X - dot(Phi_d, Wd) + Y1 / mu) - Y5 / mu + S2) / g  # Ms(1, N)
     Ms = S_tau(Ms1, lamda / (mu * g))  # Ms(1, N)
     return Ms
 
 
-def update_J(N, Wd, Y2, eps, mu):
+def update_J(N, Wd, Y2, mu):
+    eps = 1e-10
     #    J(K, N)   Wd(K, N)   Y2(K, N)
     A = Wd - Y2 / mu  # A(K, N)
     U, sigma, VT = svd(A)  # U(K,K)  sigma(10,)   VT(N,N)
-    w = sqrt(N) / (abs(sigma) + eps)  # W(10, 0)
-    # sigma = sgn(sigma) * max_0(abs(sigma) - 1 / mu * w)  # sigma(10, )
-    sigma = S_tau(sigma, 1 / mu * w)
+    # w = sqrt(N) / (abs(sigma) + eps)  # W(10, 0)
+    # sigma = S_tau(sigma, 1 / mu * w)
+    # S = zeros((U.shape[1], VT.shape[0]))  # S(K, N)
+    # for i in range(len(sigma)):
+    #     S[i][i] = sigma[i]
     S = zeros((U.shape[1], VT.shape[0]))  # S(K, N)
     for i in range(len(sigma)):
-        S[i][i] = sigma[i]
+        wi = sqrt(N) / (abs(sigma[i]) + eps)
+        S[i][i] = S_tau(sigma[i], 1 / mu * wi)
     J = dot(U, S, VT)  # (K, N)
     return J
